@@ -49,7 +49,7 @@ library(POMA)
 
 valores <- t(as.matrix(data.frame(cachexiadata[,-c(1,2)], row.names = cachexiadata[,1])))
 
-columnasdatos <- data.frame(Patient.type=cachexiadata[,2], row.names = cachexiadata[,1])
+columnasdatos <- data.frame(Group=cachexiadata[,2], row.names = cachexiadata[,1])
 
 sumexpcachexia <- SummarizedExperiment(assays = valores, colData = columnasdatos)
 
@@ -63,7 +63,7 @@ library(POMA)
 
 valores <- data.frame(cachexiadata[,-c(1,2)], row.names = cachexiadata[,1])
 
-columnasdatos <- data.frame(Patient.ID=cachexiadata[,1], Patient.type=cachexiadata[,2])
+columnasdatos <- data.frame(Patient.ID=cachexiadata[,1], Group=cachexiadata[,2])
 
 sumexpcachexia2 <- PomaCreateObject(metadata = columnasdatos, features = valores)
 
@@ -82,32 +82,93 @@ if(mean(is.na(assay(sumexpcachexia)))==0){
   cachexiamod <- PomaImpute(sumexpcachexia)
 }
 
-# 
-PomaBoxplots(sumexpcachexia, outcome = "Patient.type")
-boxplot(assay(sumexpcachexia), col=rep(c("steelblue","tomato"),c(47,30)))
 
-sumexpcachexia_norm <- PomaNorm(sumexpcachexia, method = "auto_scaling")
-boxplot(scale(assay(sumexpcachexia)), col=rep(c("steelblue","tomato"),c(47,30)))
-PomaBoxplots(sumexpcachexia_norm, outcome = "Patient.type")
-PomaBoxplots(PomaNorm(sumexpcachexia, method = "log"), outcome = "Patient.type")
+boxplot(assay(sumexpcachexia), col=rep(c("steelblue","tomato"),c(47,30)), xaxt="n", xlab="Patients", ylab="Metabolite values",
+        main="Metabolite values for 77 patients in two groups")
+axis(1, labels=F, at=c(1:77))
 
-boxplot(log2(assay(sumexpcachexia)), col=rep(c("steelblue","tomato"),c(47,30)))
+par(mfrow=c(2,2))
+for(mod_val in c("auto_scaling","log_pareto","log_scaling","log")){
+  boxplot(assay(PomaNorm(sumexpcachexia, method = mod_val)), col=rep(c("steelblue","tomato"),c(47,30)), xaxt="n",
+          main=mod_val)}
 
-boxplot(scale(log2(assay(sumexpcachexia))), col=rep(c("steelblue","tomato"),c(47,30)))
+par(mfrow=c(1,2))
+boxplot(log2(assay(sumexpcachexia)), col=rep(c("steelblue","tomato"),c(47,30)), xaxt="n",
+        main="Log-transformed values")
+boxplot(scale(log2(assay(sumexpcachexia))), col=rep(c("steelblue","tomato"),c(47,30)), xaxt="n",
+        main="Normalized log-transformed values")
 
-head(scale(assay(sumexpcachexia)), c(6,5))
+par(mfrow=c(1,1))
 
-prcompscale <- prcomp(scale(t(assay(sumexpcachexia))), center = F, scale. = F)
-head(prcompscale$x, c(6,5))
 
-prcomplog2 <- prcomp(log2(t(assay(sumexpcachexia))), center = F, scale. = F)
-head(prcomplog2$x, c(6,5))
+sumexpcachexia_log <- PomaNorm(sumexpcachexia, method = "log")
 
-prcomplog2 <- prcomp(scale(log2(t(assay(sumexpcachexia)))))
-head(prcomplog2$x, c(6,5))
+head(assay(sumexpcachexia_log),c(6,5))
+head(log(assay(sumexpcachexia)),c(6,5))
 
-head(prcomp(scale(t(assay(sumexpcachexia))))$x, c(6,5))
-
-plot(prcompscale$x[,1], prcompscale$x[,2])
-
+prcomplog2 <- prcomp(t(assay(sumexpcachexia_log)))
 plot(prcomplog2$x[,1], prcomplog2$x[,2])
+
+library(mixOmics)
+
+acp <- tune.pca(t(assay(sumexpcachexia_log)), scale = T, ncomp = 10)
+plot(acp, main="Proportion of explained variance for each PC")
+
+round(acp$cum.var*100,2)
+round(acp$prop_expl_var$X*100,2)
+
+acp <- tune.pca(t(assay(sumexpcachexia_log)), scale = T, ncomp = 2)
+round(acp$prop_expl_var$X*100,2)
+
+plotIndiv(acp, ind.names = F, group = colData(sumexpcachexia_log)[,1], ellipse = T, title = "ACP de 63 metabolitos para dos grupos de pacientes",
+          legend = T, legend.title = "Grupo")
+
+
+plotVar(acp, cex = 3, title = "Contribución de los metabolitos en los componentes y correlaciones entre metabolitos")
+plotVar(acp, var.names = F)
+
+biplot(acp, group = colData(sumexpcachexia_log)[,1], ind.names = F, var.names.size = 3, legend.title = "Grupo")
+
+selectVar(acp, comp = 1)$value
+plotLoadings(acp, comp = 1)
+
+selectVar(acp, comp = 2)$value
+plotLoadings(acp, comp = 2)
+
+
+set.seed(42)
+acp_mod <- tune.spca(t(assay(sumexpcachexia_log)), scale = T, ncomp = 2, 
+                              folds = 5, 
+                              test.keepX = 10:nrow(assay(sumexpcachexia_log)), nrepeat = 50) 
+acp_mod$choice.keepX
+
+plot(acp_mod)
+
+
+dist_euc <- dist(scale(t(assay(sumexpcachexia_log))))
+heatmap(as.matrix(dist_euc), RowSideColors = rep(c("steelblue","tomato"),c(47,30)), 
+         ColSideColors = rep(c("steelblue","tomato"),c(47,30)))
+
+heatmap(as.matrix(cor(scale(assay(sumexpcachexia_log)))), RowSideColors = rep(c("steelblue","tomato"),c(47,30)), 
+        ColSideColors = rep(c("steelblue","tomato"),c(47,30)))
+
+require(MASS)
+samm <- sammon(dist_euc, trace=FALSE)
+
+plot(samm$points, pch = rep(c(19,17),c(47,30)), col = rep(c("steelblue","tomato"),c(47,30)), 
+     xlab="Component 1", ylab="Component 2", main="Sammon's non-linear mapping of metabolite values for two patient groups")
+library(ade4)
+s.chull(samm$points, fac = factor(colData(sumexpcachexia_log)[,1]), xax=1, optchull = 1, clabel = 0, col = c("steelblue","tomato"), add.plot = T)
+legend("bottomright", legend=unique(colData(sumexpcachexia_log)[,1]), pch=c(19,17), col = c("steelblue","tomato"),title="Grupo")
+
+
+mds <- cmdscale(dist_euc, k = 10, eig = TRUE)
+round(mds$eig^2 / sum(mds$eig^2) * 100, 2)
+plot(mds$points, pch = rep(c(19,17),c(47,30)), col = rep(c("steelblue","tomato"),c(47,30)), 
+     xlab="Component 1", ylab="Component 2", main="Classical MDS of metabolite values for two patient groups")
+s.chull(mds$points, fac = factor(colData(sumexpcachexia_log)[,1]), xax=1, optchull = 1, clabel = 0, col = c("steelblue","tomato"), add.plot = T)
+legend("topright", legend=unique(colData(sumexpcachexia_log)[,1]), pch=c(19,17), col = c("steelblue","tomato"),title="Grupo")
+
+
+clust <- hclust(dist_euc, method="average")
+plot(hclust(dist_euc,method="average"), labels = colData(sumexpcachexia_log)[,1], hang=-1)
