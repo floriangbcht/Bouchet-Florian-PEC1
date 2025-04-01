@@ -294,6 +294,3 @@ fviz_cluster(k_means, data = assay(sumexpcachexia_log_norm), palette = c("steelb
              ellipse.type = "euclid", star.plot = TRUE, main="Clusters of metabolites from k-means analysis")
 # Efectivamente tenemos 4 clusteres con poco solape aunque hay cercanía, el último siendo muy pequeño y más separado de los otros
 # Podría ser interesante a partir de este resultado intentar ver como el grupo y el tipo de pacientes explica esta variabilidad (hacerlo al reves que en el análisis de correspondencias previo)
-
-
-
